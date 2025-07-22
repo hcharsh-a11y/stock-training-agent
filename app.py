@@ -1,4 +1,4 @@
-# app.py (Final Robust Prediction Loop)
+# app.py (Final Manual Array Handling)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -44,22 +44,29 @@ def load_assets(_ticker):
         return None, None
 
 def generate_forecast(model, data, scaler):
-    """Uses the loaded model to forecast future prices."""
+    """Uses the loaded model to forecast future prices with robust array handling."""
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
     future_predictions = []
-    current_sequence = last_sequence_scaled.reshape(1, SEQUENCE_LENGTH, 1)
+    current_sequence_list = list(last_sequence_scaled.flatten()) # Start with a simple Python list
 
     for _ in range(FORECAST_DAYS):
-        next_pred_scaled = model.predict(current_sequence, verbose=0)
-        future_predictions.append(next_pred_scaled[0, 0])
+        # Reshape the list into the 3D array the model expects
+        current_sequence_array = np.array(current_sequence_list).reshape(1, SEQUENCE_LENGTH, 1)
         
-        # --- THIS IS THE NEW, MORE ROBUST METHOD ---
-        # Shift all elements to the left
-        current_sequence = np.roll(current_sequence, -1, axis=1)
-        # Assign the new prediction to the last spot
-        current_sequence[0, -1, 0] = next_pred_scaled[0, 0]
+        # Get the prediction
+        next_pred_scaled = model.predict(current_sequence_array, verbose=0)
+        
+        # Append the scalar prediction to our results
+        prediction_value = next_pred_scaled[0, 0]
+        future_predictions.append(prediction_value)
+        
+        # --- THIS IS THE NEW, MANUAL METHOD ---
+        # Remove the oldest value from the list
+        current_sequence_list.pop(0)
+        # Add the new prediction to the end of the list
+        current_sequence_list.append(prediction_value)
         # --- END OF FIX ---
 
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
