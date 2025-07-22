@@ -34,4 +34,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: Automated daily model training"
-          file_pattern: 'trained_models/*.keras trained_models/*.joblib'
+          file_pattern: 'trained_models/*.keras trained_models/*.joblib trained_models/*.json'
