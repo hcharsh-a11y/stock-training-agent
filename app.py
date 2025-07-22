@@ -1,4 +1,4 @@
-# app.py (with Debugging)
+# app.py (Final Robust Plotting)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -59,11 +59,13 @@ def generate_forecast(model, data, scaler):
     return future_forecast
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
+    """Creates a robust Plotly chart."""
     last_date = stock_data.index[-1]
     future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
     
     fig = go.Figure()
     
+    # Add historical data trace
     fig.add_trace(go.Scatter(
         x=stock_data.index, 
         y=stock_data['Close'], 
@@ -72,6 +74,7 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='royalblue', width=2)
     ))
     
+    # Add forecast data trace
     fig.add_trace(go.Scatter(
         x=future_dates, 
         y=future_forecast.flatten(), 
@@ -80,14 +83,20 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='darkorange', width=2, dash='dash')
     ))
     
+    # Manually calculate y-axis range for robustness
+    all_values = np.concatenate([stock_data['Close'].values, future_forecast.flatten()])
+    y_min = all_values.min() * 0.95
+    y_max = all_values.max() * 1.05
+    
+    # Update layout
     fig.update_layout(
         title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
-        template="plotly_white",
         xaxis_title="Date",
         yaxis_title="Stock Price",
-        yaxis=dict(rangemode='tozero', autorange=True),
+        yaxis=dict(range=[y_min, y_max]), # Set manual range
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
+    
     return fig
 
 # --- Streamlit UI ---
@@ -110,16 +119,7 @@ if selected_stock_name:
                 
                 with st.spinner("Generating forecast..."):
                     future_forecast = generate_forecast(model, data, scaler)
-                
-                # --- DEBUGGING OUTPUT ---
-                st.subheader("Debugging Information")
-                st.write("Last 5 days of historical data:")
-                st.dataframe(data.tail())
-                st.write("Forecasted values:")
-                st.dataframe(future_forecast)
-                # --- END DEBUGGING ---
 
-                st.subheader("Forecast Chart")
                 st.plotly_chart(plot_forecast(data, future_forecast, selected_stock_name), use_container_width=True)
 
         except Exception as e:
