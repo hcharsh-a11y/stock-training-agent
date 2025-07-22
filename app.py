@@ -1,4 +1,4 @@
-# app.py (with All Features)
+# app.py (Final Definitive Solution)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -36,7 +36,6 @@ def load_assets(_ticker):
     scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
     rmse_path = os.path.join(MODEL_DIR, f"{_ticker}_rmse.json")
     
-    # Check if all files exist
     if not all(os.path.exists(p) for p in [model_path, scaler_path, rmse_path]):
         return None, None, None
         
@@ -103,19 +102,15 @@ if selected_stock_name:
     
     if model and scaler and rmse:
         try:
-            # Download 1 year of data for context
             data = yf.download(ticker, period="1y", progress=False)
             
             if data.empty:
                 st.error("Could not download stock data.")
             else:
-                # --- Display Metrics and Precision ---
                 st.subheader("Today's Snapshot & Model Precision")
                 
-                # Get latest data
                 latest = data.iloc[-1]
                 
-                # Determine currency
                 currency_symbol = "$"
                 try:
                     stock_info = yf.Ticker(ticker)
@@ -123,17 +118,23 @@ if selected_stock_name:
                     if currency == "INR":
                         currency_symbol = "₹"
                 except Exception:
-                    pass # Default to $ if info fails
+                    pass
+
+                # --- THE DEFINITIVE FIX IS HERE ---
+                # Convert Pandas Series to a simple float before formatting
+                last_close_val = float(latest['Close'])
+                high_val = float(latest['High'])
+                low_val = float(latest['Low'])
+                # --- END FIX ---
 
                 col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Last Close", f"{currency_symbol}{latest['Close']:.2f}")
-                col2.metric("Day High", f"{currency_symbol}{latest['High']:.2f}")
-                col3.metric("Day Low", f"{currency_symbol}{latest['Low']:.2f}")
+                col1.metric("Last Close", f"{currency_symbol}{last_close_val:.2f}")
+                col2.metric("Day High", f"{currency_symbol}{high_val:.2f}")
+                col3.metric("Day Low", f"{currency_symbol}{low_val:.2f}")
                 col4.metric("Model Precision (RMSE)", f"{currency_symbol}{rmse:.2f}", help="Root Mean Square Error. Lower is better. This shows the model's average prediction error on historical test data.")
                 
                 st.divider()
 
-                # --- Display Forecast Chart ---
                 st.subheader(f"Forecast for {selected_stock_name}")
                 
                 with st.spinner("Generating forecast..."):
@@ -145,4 +146,3 @@ if selected_stock_name:
             st.error(f"An error occurred: {e}")
     else:
         st.warning(f"The model for {selected_stock_name} is not available yet. The agent may still be training it. Please run the training agent and check back later.")
-
