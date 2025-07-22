@@ -1,8 +1,8 @@
-# requirements.txt
+streamlit
 yfinance
 pandas
 numpy
 scikit-learn
 tensorflow
 joblib
-google-cloud-storage
+plotly
