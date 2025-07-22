@@ -1,4 +1,4 @@
-# app.py (with Color Metrics)
+# app.py (Final Definitive Solution)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -102,7 +102,6 @@ if selected_stock_name:
     
     if model and scaler and rmse:
         try:
-            # Download 1 year of data for context
             data = yf.download(ticker, period="1y", progress=False)
             
             if data.empty:
@@ -110,11 +109,9 @@ if selected_stock_name:
             else:
                 st.subheader("Today's Snapshot & Model Precision")
                 
-                # --- THIS IS THE NEW LOGIC FOR COLOR METRICS ---
                 latest = data.iloc[-1]
-                previous = data.iloc[-2] # Get previous day's data
+                previous = data.iloc[-2]
                 
-                # Calculate the change from previous day's close
                 price_change = latest['Close'] - previous['Close']
                 
                 currency_symbol = "$"
@@ -126,17 +123,19 @@ if selected_stock_name:
                 except Exception:
                     pass
 
+                # --- THE DEFINITIVE FIX IS HERE ---
+                # Convert all Pandas Series objects to simple floats before formatting
                 last_close_val = float(latest['Close'])
                 high_val = float(latest['High'])
                 low_val = float(latest['Low'])
-                
+                price_change_val = float(price_change) # This was the missing conversion
+                # --- END FIX ---
+
                 col1, col2, col3, col4 = st.columns(4)
-                # Use the 'delta' parameter in st.metric to show color
-                col1.metric("Last Close", f"{currency_symbol}{last_close_val:.2f}", delta=f"{price_change:.2f}")
+                col1.metric("Last Close", f"{currency_symbol}{last_close_val:.2f}", delta=f"{price_change_val:.2f}")
                 col2.metric("Day High", f"{currency_symbol}{high_val:.2f}")
                 col3.metric("Day Low", f"{currency_symbol}{low_val:.2f}")
                 col4.metric("Model Precision (RMSE)", f"{currency_symbol}{rmse:.2f}", help="Root Mean Square Error. Lower is better. This shows the model's average prediction error on historical test data.")
-                # --- END OF NEW LOGIC ---
                 
                 st.divider()
 
