@@ -1,4 +1,4 @@
-# main.py (with Precision Score)
+# main.py (Final Definitive Solution with Session Clearing)
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -15,7 +15,7 @@ import json
 START_DATE = '2015-01-01'
 SEQUENCE_LENGTH = 60
 MODEL_DIR = "trained_models"
-TRAIN_TEST_SPLIT = 0.9 # Use 90% of data for training, 10% for testing
+TRAIN_TEST_SPLIT = 0.9
 
 STOCKS = {
     "Apple Inc. (AAPL)": "AAPL",
@@ -29,18 +29,20 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 def create_and_evaluate_model(ticker):
     """
-    Downloads data, trains a model, evaluates its precision (RMSE),
-    and saves the model, scaler, and precision score.
+    Trains a model in an isolated session to prevent data leakage.
     """
-    print(f"--- Processing {ticker} ---")
+    # --- THE DEFINITIVE FIX IS HERE ---
+    # Clear the TensorFlow session to create a completely new, isolated model.
+    tf.keras.backend.clear_session()
+    # --- END FIX ---
     
-    # 1. Download Data
+    print(f"--- Starting new isolated session for {ticker} ---")
+    
     data = yf.download(ticker, start=START_DATE, end=pd.to_datetime('today'), progress=False)
     if data.empty:
         print(f"No data for {ticker}, skipping.")
         return
 
-    # 2. Prepare Data and Scaler
     scaler = MinMaxScaler(feature_range=(0, 1))
     close_prices = data['Close'].values.reshape(-1, 1)
     scaled_data = scaler.fit_transform(close_prices)
@@ -52,12 +54,10 @@ def create_and_evaluate_model(ticker):
     X, y = np.array(X), np.array(y)
     X = np.reshape(X, (X.shape[0], X.shape[1], 1))
 
-    # 3. Split data for training and evaluation
     split_index = int(len(X) * TRAIN_TEST_SPLIT)
     X_train, X_test = X[:split_index], X[split_index:]
     y_train, y_test = y[:split_index], y[split_index:]
 
-    # 4. Build and Train LSTM Model on the training set
     model = Sequential([
         LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
         Dropout(0.2),
@@ -70,7 +70,6 @@ def create_and_evaluate_model(ticker):
     print(f"Training model for {ticker}...")
     model.fit(X_train, y_train, epochs=25, batch_size=32, verbose=0)
 
-    # 5. Evaluate the model and calculate RMSE
     print(f"Evaluating model precision for {ticker}...")
     predictions_scaled = model.predict(X_test, verbose=0)
     predictions = scaler.inverse_transform(predictions_scaled)
@@ -79,13 +78,11 @@ def create_and_evaluate_model(ticker):
     rmse = np.sqrt(mean_squared_error(actuals, predictions))
     print(f"Precision (RMSE) for {ticker}: {rmse}")
 
-    # 6. Re-train the model on the FULL dataset for best forecasting performance
     print(f"Re-training model on full dataset for {ticker}...")
     model.fit(X, y, epochs=25, batch_size=32, verbose=0)
 
-    # 7. Save the final model, scaler, and the calculated RMSE score
     model_path = os.path.join(MODEL_DIR, f"{ticker}_model.keras")
-    scaler_path = os.path.join(MODEL_DIR, f"{ticker}_scaler.joblib")
+    scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
     rmse_path = os.path.join(MODEL_DIR, f"{ticker}_rmse.json")
     
     model.save(model_path)
@@ -102,3 +99,4 @@ if __name__ == "__main__":
             create_and_evaluate_model(ticker)
         except Exception as e:
             print(f"Failed to process {ticker}. Error: {e}")
+
