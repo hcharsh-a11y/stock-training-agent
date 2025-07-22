@@ -1,3 +1,4 @@
+# app.py (with Debugging)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -23,20 +24,16 @@ STOCKS = {
     "Tata Consultancy Services (TCS.NS)": "TCS.NS",
     "Alphabet Inc. (GOOGL)": "GOOGL",
     "Microsoft Corporation (MSFT)": "MSFT",
-    # Add the rest of your stocks here if you have more
 }
 
 # --- Core Functions ---
 
 @st.cache_resource(show_spinner="Loading AI model and scaler...")
 def load_assets(_ticker):
-    """Loads the pre-trained model and scaler from the repository."""
     model_path = os.path.join(MODEL_DIR, f"{_ticker}_model.keras")
     scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
-    
     if not os.path.exists(model_path) or not os.path.exists(scaler_path):
         return None, None
-        
     try:
         model = load_model(model_path)
         scaler = joblib.load(scaler_path)
@@ -46,7 +43,6 @@ def load_assets(_ticker):
         return None, None
 
 def generate_forecast(model, data, scaler):
-    """Uses the loaded model to forecast future prices."""
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
@@ -56,7 +52,6 @@ def generate_forecast(model, data, scaler):
     for _ in range(FORECAST_DAYS):
         next_pred_scaled = model.predict(current_sequence, verbose=0)
         future_predictions.append(next_pred_scaled[0, 0])
-        
         new_prediction_reshaped = next_pred_scaled.reshape(1, 1, 1)
         current_sequence = np.append(current_sequence[:, 1:, :], new_prediction_reshaped, axis=1)
 
@@ -64,13 +59,11 @@ def generate_forecast(model, data, scaler):
     return future_forecast
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
-    """Creates a Plotly chart for the historical data and forecast."""
     last_date = stock_data.index[-1]
     future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
     
     fig = go.Figure()
     
-    # Plot historical data
     fig.add_trace(go.Scatter(
         x=stock_data.index, 
         y=stock_data['Close'], 
@@ -79,7 +72,6 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='royalblue', width=2)
     ))
     
-    # Plot forecasted data
     fig.add_trace(go.Scatter(
         x=future_dates, 
         y=future_forecast.flatten(), 
@@ -88,16 +80,14 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='darkorange', width=2, dash='dash')
     ))
     
-    # Update layout for better appearance and to fix visibility
     fig.update_layout(
         title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
-        template="plotly_white", # Use a white template for better contrast
+        template="plotly_white",
         xaxis_title="Date",
         yaxis_title="Stock Price",
-        yaxis=dict(rangemode='tozero', autorange=True), # Force y-axis to start at zero and auto-range
+        yaxis=dict(rangemode='tozero', autorange=True),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
-    
     return fig
 
 # --- Streamlit UI ---
@@ -108,25 +98,31 @@ selected_stock_name = st.selectbox("Choose a stock to forecast:", list(STOCKS.ke
 
 if selected_stock_name:
     ticker = STOCKS[selected_stock_name]
-    
     model, scaler = load_assets(ticker)
     
     if model and scaler:
         try:
             data = yf.download(ticker, period="1y", progress=False)
-            
             if data.empty:
-                st.error("Could not download stock data. The ticker may be invalid or there might be a temporary network issue.")
+                st.error("Could not download stock data.")
             else:
                 st.subheader(f"Forecast for {selected_stock_name}")
                 
                 with st.spinner("Generating forecast..."):
                     future_forecast = generate_forecast(model, data, scaler)
                 
+                # --- DEBUGGING OUTPUT ---
+                st.subheader("Debugging Information")
+                st.write("Last 5 days of historical data:")
+                st.dataframe(data.tail())
+                st.write("Forecasted values:")
+                st.dataframe(future_forecast)
+                # --- END DEBUGGING ---
+
+                st.subheader("Forecast Chart")
                 st.plotly_chart(plot_forecast(data, future_forecast, selected_stock_name), use_container_width=True)
 
         except Exception as e:
-            st.error(f"An error occurred while processing the forecast: {e}")
-
+            st.error(f"An error occurred: {e}")
     else:
-        st.warning(f"The model for {selected_stock_name} is not available yet. The agent may still be training it. Please check back later.")
+        st.warning(f"Model for {selected_stock_name} not available.")
