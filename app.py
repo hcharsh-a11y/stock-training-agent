@@ -1,4 +1,4 @@
-# app.py (Final, Corrected Version)
+# app.py (Final Version with Graph Fix)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -48,7 +48,6 @@ def load_assets(_ticker):
 
 def generate_forecast(model, data, scaler):
     """Uses the loaded model to forecast future prices."""
-    # Note: Using the last 60 days from the original (unscaled) data for prediction
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
@@ -59,16 +58,11 @@ def generate_forecast(model, data, scaler):
         next_pred_scaled = model.predict(current_sequence, verbose=0)
         future_predictions.append(next_pred_scaled[0, 0])
         
-        # --- THIS IS THE CORRECTED PART ---
-        # Reshape the prediction to match the 3D shape of the sequence
         new_prediction_reshaped = next_pred_scaled.reshape(1, 1, 1)
-        # Append the new prediction and drop the oldest value from the sequence
         current_sequence = np.append(current_sequence[:, 1:, :], new_prediction_reshaped, axis=1)
-        # --- END OF FIX ---
 
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
     return future_forecast
-
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
     """Creates a Plotly chart for the historical data and forecast."""
@@ -76,14 +70,36 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
     future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
     
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Close'], mode='lines', name='Historical Price'))
-    fig.add_trace(go.Scatter(x=future_dates, y=future_forecast.flatten(), mode='lines', name='Forecast', line=dict(color='orange', dash='dash')))
+    
+    # Plot historical data with a clear color and thickness
+    fig.add_trace(go.Scatter(
+        x=stock_data.index, 
+        y=stock_data['Close'], 
+        mode='lines', 
+        name='Historical Price',
+        line=dict(color='royalblue', width=2)
+    ))
+    
+    # Plot forecasted data with markers and a distinct style
+    fig.add_trace(go.Scatter(
+        x=future_dates, 
+        y=future_forecast.flatten(), 
+        mode='lines+markers',
+        name='Forecast', 
+        line=dict(color='darkorange', width=2, dash='dash'),
+        marker=dict(size=4, color='darkorange')
+    ))
+    
+    # Update layout for better appearance
     fig.update_layout(
         title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
         template="plotly_white",
         xaxis_title="Date",
-        yaxis_title="Stock Price"
+        yaxis_title="Stock Price",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        margin=dict(l=40, r=40, t=80, b=40)
     )
+    
     return fig
 
 # --- Streamlit UI ---
