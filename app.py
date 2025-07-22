@@ -1,4 +1,4 @@
-# app.py (Final, Robust Version)
+# app.py (Final, Corrected Version)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -24,7 +24,7 @@ STOCKS = {
     "Tata Consultancy Services (TCS.NS)": "TCS.NS",
     "Alphabet Inc. (GOOGL)": "GOOGL",
     "Microsoft Corporation (MSFT)": "MSFT",
-    # Add the rest of your stocks here
+    # Add the rest of your stocks here if you have more
 }
 
 # --- Core Functions ---
@@ -48,6 +48,7 @@ def load_assets(_ticker):
 
 def generate_forecast(model, data, scaler):
     """Uses the loaded model to forecast future prices."""
+    # Note: Using the last 60 days from the original (unscaled) data for prediction
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
@@ -57,10 +58,17 @@ def generate_forecast(model, data, scaler):
     for _ in range(FORECAST_DAYS):
         next_pred_scaled = model.predict(current_sequence, verbose=0)
         future_predictions.append(next_pred_scaled[0, 0])
-        current_sequence = np.append(current_sequence[:, 1:, :], [[next_pred_scaled]], axis=1)
+        
+        # --- THIS IS THE CORRECTED PART ---
+        # Reshape the prediction to match the 3D shape of the sequence
+        new_prediction_reshaped = next_pred_scaled.reshape(1, 1, 1)
+        # Append the new prediction and drop the oldest value from the sequence
+        current_sequence = np.append(current_sequence[:, 1:, :], new_prediction_reshaped, axis=1)
+        # --- END OF FIX ---
 
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
     return future_forecast
+
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
     """Creates a Plotly chart for the historical data and forecast."""
