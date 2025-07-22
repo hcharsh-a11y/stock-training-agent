@@ -1,4 +1,4 @@
-# main.py (Final Definitive Solution with Session Clearing)
+# main.py (with Final Diagnostic Check)
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -10,6 +10,7 @@ from tensorflow.keras.layers import Dense, LSTM, Dropout
 import joblib
 import os
 import json
+import sys # Import the sys library to exit with an error
 
 # --- Configuration ---
 START_DATE = '2015-01-01'
@@ -25,24 +26,25 @@ STOCKS = {
     "Microsoft Corporation (MSFT)": "MSFT",
 }
 
+# This line is important. It creates the directory at the start.
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def create_and_evaluate_model(ticker):
     """
     Trains a model in an isolated session to prevent data leakage.
     """
-    # --- THE DEFINITIVE FIX IS HERE ---
-    # Clear the TensorFlow session to create a completely new, isolated model.
     tf.keras.backend.clear_session()
-    # --- END FIX ---
-    
     print(f"--- Starting new isolated session for {ticker} ---")
     
-    data = yf.download(ticker, start=START_DATE, end=pd.to_datetime('today'), progress=False)
+    # Use a specific user-agent to avoid being blocked by Yahoo Finance
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    data = yf.download(ticker, start=START_DATE, end=pd.to_datetime('today'), progress=False, session=headers)
+    
     if data.empty:
-        print(f"No data for {ticker}, skipping.")
-        return
+        print(f"ERROR: No data downloaded for {ticker}. Skipping.")
+        return False # Return False on failure
 
+    # ... (Rest of the function is the same as before) ...
     scaler = MinMaxScaler(feature_range=(0, 1))
     close_prices = data['Close'].values.reshape(-1, 1)
     scaled_data = scaler.fit_transform(close_prices)
@@ -82,7 +84,7 @@ def create_and_evaluate_model(ticker):
     model.fit(X, y, epochs=25, batch_size=32, verbose=0)
 
     model_path = os.path.join(MODEL_DIR, f"{ticker}_model.keras")
-    scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
+    scaler_path = os.path.join(MODEL_DIR, f"{ticker}_scaler.joblib")
     rmse_path = os.path.join(MODEL_DIR, f"{ticker}_rmse.json")
     
     model.save(model_path)
@@ -91,12 +93,23 @@ def create_and_evaluate_model(ticker):
         json.dump({'rmse': rmse}, f)
     
     print(f"✅ Model, scaler, and precision score for {ticker} saved successfully.")
+    return True # Return True on success
 
 # --- Main execution loop ---
 if __name__ == "__main__":
+    success_count = 0
     for name, ticker in STOCKS.items():
         try:
-            create_and_evaluate_model(ticker)
+            if create_and_evaluate_model(ticker):
+                success_count += 1
         except Exception as e:
-            print(f"Failed to process {ticker}. Error: {e}")
+            print(f"CRITICAL ERROR while processing {ticker}. Error: {e}")
+    
+    # --- FINAL DIAGNOSTIC CHECK ---
+    print("\n--- FINAL CHECK ---")
+    if success_count == 0:
+        print("🔴 ERROR: No models were successfully trained. The 'trained_models' folder will be empty.")
+        sys.exit(1) # Exit with an error code to make the GitHub Action fail
+    else:
+        print(f"✅ SUCCESS: {success_count} out of {len(STOCKS)} models were trained.")
 
