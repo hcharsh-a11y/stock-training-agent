@@ -9,7 +9,6 @@ jobs:
   train-and-commit:
     runs-on: ubuntu-latest
     
-    # Add this permissions block
     permissions:
       contents: write
       
@@ -30,8 +29,17 @@ jobs:
       - name: Run training script
         run: python main.py
         
+      # --- THIS IS THE NEW DEBUGGING STEP ---
+      - name: Verify that files were created
+        run: |
+          echo "Listing all files and directories recursively:"
+          ls -R
+      # --- END NEW STEP ---
+        
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: Automated daily model training"
-          file_pattern: 'trained_models/*.keras trained_models/*.joblib trained_models/*.json'
+          # We will try to commit everything in the folder
+          file_pattern: 'trained_models/*'
+
