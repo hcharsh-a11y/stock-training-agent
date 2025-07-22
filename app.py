@@ -1,4 +1,3 @@
-# app.py (Final Version with Graph Fix)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -71,7 +70,7 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
     
     fig = go.Figure()
     
-    # Plot historical data with a clear color and thickness
+    # Plot historical data
     fig.add_trace(go.Scatter(
         x=stock_data.index, 
         y=stock_data['Close'], 
@@ -80,24 +79,23 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='royalblue', width=2)
     ))
     
-    # Plot forecasted data with markers and a distinct style
+    # Plot forecasted data
     fig.add_trace(go.Scatter(
         x=future_dates, 
         y=future_forecast.flatten(), 
-        mode='lines+markers',
+        mode='lines',
         name='Forecast', 
-        line=dict(color='darkorange', width=2, dash='dash'),
-        marker=dict(size=4, color='darkorange')
+        line=dict(color='darkorange', width=2, dash='dash')
     ))
     
-    # Update layout for better appearance
+    # Update layout for better appearance and to fix visibility
     fig.update_layout(
         title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
-        template="plotly_white",
+        template="plotly_white", # Use a white template for better contrast
         xaxis_title="Date",
         yaxis_title="Stock Price",
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
-        margin=dict(l=40, r=40, t=80, b=40)
+        yaxis=dict(rangemode='tozero', autorange=True), # Force y-axis to start at zero and auto-range
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     
     return fig
