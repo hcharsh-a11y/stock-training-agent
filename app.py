@@ -1,4 +1,4 @@
-# app.py (Final Manual Array Handling)
+# app.py (Definitive Solution)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -44,31 +44,34 @@ def load_assets(_ticker):
         return None, None
 
 def generate_forecast(model, data, scaler):
-    """Uses the loaded model to forecast future prices with robust array handling."""
+    """
+    Uses the loaded model to forecast future prices with robust, manual array handling
+    to prevent dimension errors.
+    """
+    # Start with the last known sequence of data
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
+    # Use a simple Python list for manipulation to avoid NumPy dimension issues
+    current_sequence_list = list(last_sequence_scaled.flatten())
     future_predictions = []
-    current_sequence_list = list(last_sequence_scaled.flatten()) # Start with a simple Python list
 
     for _ in range(FORECAST_DAYS):
-        # Reshape the list into the 3D array the model expects
+        # Convert the list to the 3D NumPy array shape the model expects for prediction
         current_sequence_array = np.array(current_sequence_list).reshape(1, SEQUENCE_LENGTH, 1)
         
-        # Get the prediction
+        # Predict the next value
         next_pred_scaled = model.predict(current_sequence_array, verbose=0)
         
-        # Append the scalar prediction to our results
+        # Extract the single predicted value (scalar)
         prediction_value = next_pred_scaled[0, 0]
         future_predictions.append(prediction_value)
         
-        # --- THIS IS THE NEW, MANUAL METHOD ---
-        # Remove the oldest value from the list
+        # Manually update the sequence: remove the first element and append the new prediction
         current_sequence_list.pop(0)
-        # Add the new prediction to the end of the list
         current_sequence_list.append(prediction_value)
-        # --- END OF FIX ---
 
+    # Convert the list of predictions back to a NumPy array for inverse scaling
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
     return future_forecast
 
