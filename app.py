@@ -1,4 +1,4 @@
-# app.py (Definitive Solution)
+# app.py (Definitive Final Solution)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -44,47 +44,42 @@ def load_assets(_ticker):
         return None, None
 
 def generate_forecast(model, data, scaler):
-    """
-    Uses the loaded model to forecast future prices with robust, manual array handling
-    to prevent dimension errors.
-    """
-    # Start with the last known sequence of data
+    """Uses the loaded model to forecast future prices with robust array handling."""
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
-    # Use a simple Python list for manipulation to avoid NumPy dimension issues
     current_sequence_list = list(last_sequence_scaled.flatten())
     future_predictions = []
 
     for _ in range(FORECAST_DAYS):
-        # Convert the list to the 3D NumPy array shape the model expects for prediction
         current_sequence_array = np.array(current_sequence_list).reshape(1, SEQUENCE_LENGTH, 1)
-        
-        # Predict the next value
         next_pred_scaled = model.predict(current_sequence_array, verbose=0)
-        
-        # Extract the single predicted value (scalar)
         prediction_value = next_pred_scaled[0, 0]
         future_predictions.append(prediction_value)
-        
-        # Manually update the sequence: remove the first element and append the new prediction
         current_sequence_list.pop(0)
         current_sequence_list.append(prediction_value)
 
-    # Convert the list of predictions back to a NumPy array for inverse scaling
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
     return future_forecast
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
-    """Creates a robust Plotly chart."""
+    """
+    Creates a robust Plotly chart, explicitly flattening arrays to prevent dimension errors.
+    """
     last_date = stock_data.index[-1]
     future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
+    
+    # --- THE DEFINITIVE FIX IS HERE ---
+    # Force both historical and forecast data into flat 1D arrays before plotting.
+    historical_prices = np.array(stock_data['Close']).flatten()
+    forecast_prices = np.array(future_forecast).flatten()
+    # --- END FIX ---
     
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
         x=stock_data.index, 
-        y=stock_data['Close'], 
+        y=historical_prices, # Use the guaranteed 1D array
         mode='lines', 
         name='Historical Price',
         line=dict(color='royalblue', width=2)
@@ -92,13 +87,14 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
     
     fig.add_trace(go.Scatter(
         x=future_dates, 
-        y=future_forecast.flatten(), 
+        y=forecast_prices, # Use the guaranteed 1D array
         mode='lines',
         name='Forecast', 
         line=dict(color='darkorange', width=2, dash='dash')
     ))
     
-    all_values = np.concatenate([stock_data['Close'].values, future_forecast.flatten()])
+    # Manually calculate y-axis range for robustness
+    all_values = np.concatenate([historical_prices, forecast_prices])
     y_min = all_values.min() * 0.95
     y_max = all_values.max() * 1.05
     
