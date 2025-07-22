@@ -1,0 +1,111 @@
+# app.py
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import date, timedelta
+from tensorflow.keras.models import load_model
+import plotly.graph_objects as go
+import os
+import joblib
+
+# --- App Configuration ---
+st.set_page_config(page_title="AI Stock Forecaster", page_icon="📈", layout="wide")
+
+# --- Configuration ---
+SEQUENCE_LENGTH = 60
+FORECAST_DAYS = 60
+MODEL_DIR = "trained_models"
+
+# --- Stock List (must match your training script) ---
+STOCKS = {
+    "Apple Inc. (AAPL)": "AAPL",
+    "NVIDIA Corporation (NVDA)": "NVDA",
+    "Tata Consultancy Services (TCS.NS)": "TCS.NS",
+    "Alphabet Inc. (GOOGL)": "GOOGL",
+    "Microsoft Corporation (MSFT)": "MSFT",
+    # ... add the rest of your stocks
+}
+
+
+# --- Core Functions ---
+
+@st.cache_resource(show_spinner="Loading AI model and scaler...")
+def load_assets(_ticker):
+    """Loads the pre-trained model and scaler from the repository."""
+    model_path = os.path.join(MODEL_DIR, f"{_ticker}_model.keras")
+    scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
+
+    if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+        return None, None
+
+    model = load_model(model_path)
+    scaler = joblib.load(scaler_path)
+    return model, scaler
+
+
+def generate_forecast(model, data, scaler):
+    """Uses the loaded model to forecast future prices."""
+    # Note: Using the last 60 days from the original (unscaled) data for prediction
+    last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
+    last_sequence_scaled = scaler.transform(last_sequence_unscaled)
+
+    future_predictions = []
+    current_sequence = last_sequence_scaled.reshape(1, SEQUENCE_LENGTH, 1)
+
+    for _ in range(FORECAST_DAYS):
+        next_pred_scaled = model.predict(current_sequence, verbose=0)
+        future_predictions.append(next_pred_scaled[0, 0])
+        # Update the sequence with the new prediction
+        current_sequence = np.append(current_sequence[:, 1:, :], [[next_pred_scaled]], axis=1)
+
+    future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+    return future_forecast
+
+
+def plot_forecast(stock_data, future_forecast, ticker_name):
+    """Creates a Plotly chart for the historical data and forecast."""
+    last_date = stock_data.index[-1]
+    future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
+
+    fig = go.Figure()
+    # Plot historical data
+    fig.add_trace(go.Scatter(x=stock_data.index, y=stock_data['Close'], mode='lines', name='Historical Price'))
+    # Plot forecasted data
+    fig.add_trace(go.Scatter(x=future_dates, y=future_forecast.flatten(), mode='lines', name='Forecast',
+                             line=dict(color='orange', dash='dash')))
+    fig.update_layout(
+        title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
+        template="plotly_white",
+        xaxis_title="Date",
+        yaxis_title="Stock Price (USD)"
+    )
+    return fig
+
+
+# --- Streamlit UI ---
+st.title("🤖 AI Stock Forecaster")
+st.markdown("This website uses an automated agent to provide daily updated stock forecasts.")
+
+selected_stock_name = st.selectbox("Choose a stock to forecast:", list(STOCKS.keys()))
+
+if selected_stock_name:
+    ticker = STOCKS[selected_stock_name]
+
+    model, scaler = load_assets(ticker)
+
+    if model and scaler:
+        # We only need the last ~1 year of data for context in the plot
+        data = yf.download(ticker, period="1y", progress=False)
+
+        if not data.empty:
+            st.subheader(f"Forecast for {selected_stock_name}")
+
+            with st.spinner("Generating forecast..."):
+                future_forecast = generate_forecast(model, data, scaler)
+
+            st.plotly_chart(plot_forecast(data, future_forecast, selected_stock_name), use_container_width=True)
+        else:
+            st.error(f"Could not download recent data for {ticker}.")
+    else:
+        st.warning(
+            f"The model for {selected_stock_name} is not available yet. The agent may still be training it. Please check back later.")
