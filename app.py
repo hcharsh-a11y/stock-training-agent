@@ -1,4 +1,4 @@
-# app.py (Final Robust Plotting)
+# app.py (Final Robust Prediction Loop)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -30,6 +30,7 @@ STOCKS = {
 
 @st.cache_resource(show_spinner="Loading AI model and scaler...")
 def load_assets(_ticker):
+    """Loads the pre-trained model and scaler from the repository."""
     model_path = os.path.join(MODEL_DIR, f"{_ticker}_model.keras")
     scaler_path = os.path.join(MODEL_DIR, f"{_ticker}_scaler.joblib")
     if not os.path.exists(model_path) or not os.path.exists(scaler_path):
@@ -43,6 +44,7 @@ def load_assets(_ticker):
         return None, None
 
 def generate_forecast(model, data, scaler):
+    """Uses the loaded model to forecast future prices."""
     last_sequence_unscaled = data['Close'][-SEQUENCE_LENGTH:].values.reshape(-1, 1)
     last_sequence_scaled = scaler.transform(last_sequence_unscaled)
     
@@ -52,8 +54,13 @@ def generate_forecast(model, data, scaler):
     for _ in range(FORECAST_DAYS):
         next_pred_scaled = model.predict(current_sequence, verbose=0)
         future_predictions.append(next_pred_scaled[0, 0])
-        new_prediction_reshaped = next_pred_scaled.reshape(1, 1, 1)
-        current_sequence = np.append(current_sequence[:, 1:, :], new_prediction_reshaped, axis=1)
+        
+        # --- THIS IS THE NEW, MORE ROBUST METHOD ---
+        # Shift all elements to the left
+        current_sequence = np.roll(current_sequence, -1, axis=1)
+        # Assign the new prediction to the last spot
+        current_sequence[0, -1, 0] = next_pred_scaled[0, 0]
+        # --- END OF FIX ---
 
     future_forecast = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
     return future_forecast
@@ -65,7 +72,6 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
     
     fig = go.Figure()
     
-    # Add historical data trace
     fig.add_trace(go.Scatter(
         x=stock_data.index, 
         y=stock_data['Close'], 
@@ -74,7 +80,6 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='royalblue', width=2)
     ))
     
-    # Add forecast data trace
     fig.add_trace(go.Scatter(
         x=future_dates, 
         y=future_forecast.flatten(), 
@@ -83,17 +88,15 @@ def plot_forecast(stock_data, future_forecast, ticker_name):
         line=dict(color='darkorange', width=2, dash='dash')
     ))
     
-    # Manually calculate y-axis range for robustness
     all_values = np.concatenate([stock_data['Close'].values, future_forecast.flatten()])
     y_min = all_values.min() * 0.95
     y_max = all_values.max() * 1.05
     
-    # Update layout
     fig.update_layout(
         title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast",
         xaxis_title="Date",
         yaxis_title="Stock Price",
-        yaxis=dict(range=[y_min, y_max]), # Set manual range
+        yaxis=dict(range=[y_min, y_max]),
         legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
     )
     
