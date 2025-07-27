@@ -1,4 +1,4 @@
-# main.py (Final Guaranteed Solution)
+# main.py (USD Stocks Only)
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -18,27 +18,28 @@ SEQUENCE_LENGTH = 60
 MODEL_DIR = "trained_models"
 TRAIN_TEST_SPLIT = 0.9
 
+# --- NEW, USD-ONLY STOCK LIST ---
 STOCKS = {
     "Apple Inc. (AAPL)": "AAPL",
     "NVIDIA Corporation (NVDA)": "NVDA",
-    "Tata Consultancy Services (TCS.NS)": "TCS.NS",
     "Alphabet Inc. (GOOGL)": "GOOGL",
     "Microsoft Corporation (MSFT)": "MSFT",
+    "Amazon.com, Inc. (AMZN)": "AMZN",
+    "Tesla, Inc. (TSLA)": "TSLA",
+    "Meta Platforms, Inc. (META)": "META",
+    "JPMorgan Chase & Co. (JPM)": "JPM"
 }
 
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def create_and_evaluate_model(ticker):
     """
-    Trains a model in an isolated session to prevent data leakage.
+    Trains a high-accuracy model in an isolated session.
     """
     tf.keras.backend.clear_session()
     print(f"--- Starting new isolated session for {ticker} ---")
     
-    # --- THE DEFINITIVE FIX IS HERE ---
-    # Removed the problematic 'session' parameter from the download call.
     data = yf.download(ticker, start=START_DATE, end=pd.to_datetime('today'), progress=False)
-    # --- END FIX ---
     
     if data.empty:
         print(f"ERROR: No data downloaded for {ticker}. Skipping.")
@@ -60,16 +61,21 @@ def create_and_evaluate_model(ticker):
     y_train, y_test = y[:split_index], y[split_index:]
 
     model = Sequential([
-        LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)),
+        LSTM(units=100, return_sequences=True, input_shape=(X_train.shape[1], 1)),
+        Dropout(0.2),
+        LSTM(units=100, return_sequences=True),
+        Dropout(0.2),
+        LSTM(units=100, return_sequences=True),
         Dropout(0.2),
         LSTM(units=50, return_sequences=False),
         Dropout(0.2),
         Dense(units=1)
     ])
+    
     model.compile(optimizer='adam', loss='mean_squared_error')
     
-    print(f"Training model for {ticker}...")
-    model.fit(X_train, y_train, epochs=25, batch_size=32, verbose=0)
+    print(f"Training high-accuracy model for {ticker}...")
+    model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=0)
 
     print(f"Evaluating model precision for {ticker}...")
     predictions_scaled = model.predict(X_test, verbose=0)
@@ -80,7 +86,7 @@ def create_and_evaluate_model(ticker):
     print(f"Precision (RMSE) for {ticker}: {rmse}")
 
     print(f"Re-training model on full dataset for {ticker}...")
-    model.fit(X, y, epochs=25, batch_size=32, verbose=0)
+    model.fit(X, y, epochs=50, batch_size=32, verbose=0)
 
     model_path = os.path.join(MODEL_DIR, f"{ticker}_model.keras")
     scaler_path = os.path.join(MODEL_DIR, f"{ticker}_scaler.joblib")
@@ -91,7 +97,7 @@ def create_and_evaluate_model(ticker):
     with open(rmse_path, 'w') as f:
         json.dump({'rmse': rmse}, f)
     
-    print(f"✅ Model, scaler, and precision score for {ticker} saved successfully.")
+    print(f"✅ High-accuracy model for {ticker} saved successfully.")
     return True
 
 # --- Main execution loop ---
@@ -106,7 +112,5 @@ if __name__ == "__main__":
     
     if success_count < len(STOCKS):
         print(f"🔴 WARNING: Only {success_count} out of {len(STOCKS)} models were trained.")
-        # We don't exit with an error, to allow partial success.
     else:
         print(f"✅ SUCCESS: All {success_count} models were trained.")
-
