@@ -1,4 +1,4 @@
-# app.py (Final Definitive Solution)
+# app.py (USD Stocks & Candlestick)
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -18,13 +18,16 @@ SEQUENCE_LENGTH = 60
 FORECAST_DAYS = 60
 MODEL_DIR = "trained_models"
 
-# --- Stock List ---
+# --- NEW, USD-ONLY STOCK LIST ---
 STOCKS = {
     "Apple Inc. (AAPL)": "AAPL",
     "NVIDIA Corporation (NVDA)": "NVDA",
-    "Tata Consultancy Services (TCS.NS)": "TCS.NS",
     "Alphabet Inc. (GOOGL)": "GOOGL",
     "Microsoft Corporation (MSFT)": "MSFT",
+    "Amazon.com, Inc. (AMZN)": "AMZN",
+    "Tesla, Inc. (TSLA)": "TSLA",
+    "Meta Platforms, Inc. (META)": "META",
+    "JPMorgan Chase & Co. (JPM)": "JPM"
 }
 
 # --- Core Functions ---
@@ -69,23 +72,17 @@ def generate_forecast(model, data, scaler):
     return future_forecast
 
 def plot_forecast(stock_data, future_forecast, ticker_name):
-    """Creates the main forecast chart."""
+    """Creates a Candlestick chart for historical data and overlays the forecast line."""
     last_date = stock_data.index[-1]
     future_dates = [last_date + timedelta(days=x) for x in range(1, FORECAST_DAYS + 1)]
     
-    historical_prices = np.array(stock_data['Close']).flatten()
-    forecast_prices = np.array(future_forecast).flatten()
-    
     fig = go.Figure()
     
-    fig.add_trace(go.Scatter(x=stock_data.index, y=historical_prices, mode='lines', name='Historical Price', line=dict(color='royalblue', width=2)))
-    fig.add_trace(go.Scatter(x=future_dates, y=forecast_prices, mode='lines', name='Forecast', line=dict(color='darkorange', width=2, dash='dash')))
+    fig.add_trace(go.Candlestick(x=stock_data.index, open=stock_data['Open'], high=stock_data['High'], low=stock_data['Low'], close=stock_data['Close'], name='Historical Price'))
     
-    all_values = np.concatenate([historical_prices, forecast_prices])
-    y_min = all_values.min() * 0.95
-    y_max = all_values.max() * 1.05
+    fig.add_trace(go.Scatter(x=future_dates, y=np.array(future_forecast).flatten(), mode='lines', name='Forecast', line=dict(color='darkorange', width=2, dash='dash')))
     
-    fig.update_layout(title=f"{ticker_name} - Historical Price and {FORECAST_DAYS}-Day Forecast", xaxis_title="Date", yaxis_title="Stock Price", yaxis=dict(range=[y_min, y_max]), legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
+    fig.update_layout(title=f"{ticker_name} - Candlestick Chart and AI Forecast", xaxis_title="Date", yaxis_title="Stock Price (USD)", legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01), xaxis_rangeslider_visible=False)
     
     return fig
 
@@ -114,22 +111,14 @@ if selected_stock_name:
                 
                 price_change = latest['Close'] - previous['Close']
                 
-                currency_symbol = "$"
-                try:
-                    stock_info = yf.Ticker(ticker)
-                    currency = stock_info.info.get('currency', 'USD')
-                    if currency == "INR":
-                        currency_symbol = "₹"
-                except Exception:
-                    pass
+                # --- SIMPLIFIED CURRENCY LOGIC ---
+                currency_symbol = "$" # All stocks are in USD now
+                # --- END OF SIMPLIFICATION ---
 
-                # --- THE DEFINITIVE FIX IS HERE ---
-                # Convert all Pandas Series objects to simple floats before formatting
                 last_close_val = float(latest['Close'])
                 high_val = float(latest['High'])
                 low_val = float(latest['Low'])
-                price_change_val = float(price_change) # This was the missing conversion
-                # --- END FIX ---
+                price_change_val = float(price_change)
 
                 col1, col2, col3, col4 = st.columns(4)
                 col1.metric("Last Close", f"{currency_symbol}{last_close_val:.2f}", delta=f"{price_change_val:.2f}")
